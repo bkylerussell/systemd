@@ -694,7 +694,10 @@ static int path_dispatch_io(sd_event_source *source, int fd, uint32_t revents, v
         if (inotify_mask && (s->type == PATH_CHANGED || s->type == PATH_MODIFIED))
                 path_enter_running(p);
         else
-                path_enter_waiting(p, false, true);
+        {
+                bool recheck = inotify_mask & (IN_DELETE_SELF | IN_MOVE_SELF) || !inotify_mask;
+                path_enter_waiting(p, false, recheck);
+        }
 
         return 0;
 
