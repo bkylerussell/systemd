@@ -52,7 +52,7 @@ typedef struct PathSpec {
 
 int path_spec_watch(PathSpec *s, sd_event_io_handler_t handler);
 void path_spec_unwatch(PathSpec *s);
-int path_spec_fd_event(PathSpec *s, uint32_t events);
+uint32_t path_spec_fd_event(PathSpec *s);
 void path_spec_done(PathSpec *s);
 
 static inline bool path_spec_owns_inotify_fd(PathSpec *s, int fd) {

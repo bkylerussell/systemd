@@ -2513,8 +2513,12 @@ static int service_dispatch_io(sd_event_source *source, int fd, uint32_t events,
 
         log_unit_debug(UNIT(s), "inotify event");
 
-        if (path_spec_fd_event(p, events) < 0)
+        if (events != EPOLLIN) {
+                log_error("Got invalid poll event on inotify.");
                 goto fail;
+        }
+
+        path_spec_fd_event(p);
 
         if (service_retry_pid_file(s) == 0)
                 return 0;

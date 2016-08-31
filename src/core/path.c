@@ -155,16 +155,11 @@ void path_spec_unwatch(PathSpec *s) {
         s->inotify_fd = safe_close(s->inotify_fd);
 }
 
-int path_spec_fd_event(PathSpec *s, uint32_t revents) {
+uint32_t path_spec_fd_event(PathSpec *s) {
         union inotify_event_buffer buffer;
         struct inotify_event *e;
         ssize_t l;
-        int r = 0;
-
-        if (revents != EPOLLIN) {
-                log_error("Got invalid poll event on inotify.");
-                return -EINVAL;
-        }
+        uint32_t r = 0;
 
         l = read(s->inotify_fd, &buffer, sizeof(buffer));
         if (l < 0) {
@@ -175,9 +170,8 @@ int path_spec_fd_event(PathSpec *s, uint32_t revents) {
         }
 
         FOREACH_INOTIFY_EVENT(e, buffer, l) {
-                if ((s->type == PATH_CHANGED || s->type == PATH_MODIFIED) &&
-                    s->primary_wd == e->wd)
-                        r = 1;
+                if (s->primary_wd == e->wd)
+                        r = e->mask;
         }
 
         return r;
@@ -655,7 +649,7 @@ _pure_ static const char *path_sub_state_to_string(Unit *u) {
 static int path_dispatch_io(sd_event_source *source, int fd, uint32_t revents, void *userdata) {
         PathSpec *s = userdata;
         Path *p;
-        int changed;
+        uint32_t inotify_mask;
 
         assert(s);
         assert(s->unit);
@@ -678,16 +672,19 @@ static int path_dispatch_io(sd_event_source *source, int fd, uint32_t revents, v
                 goto fail;
         }
 
-        changed = path_spec_fd_event(s, revents);
-        if (changed < 0)
+        if (revents != EPOLLIN) {
+                log_error("Got invalid poll event on inotify.");
                 goto fail;
+        }
+
+        inotify_mask = path_spec_fd_event(s);
 
         /* If we are already running, then remember that one event was
          * dispatched so that we restart the service only if something
          * actually changed on disk */
         p->inotify_triggered = true;
 
-        if (changed)
+        if (inotify_mask && (s->type == PATH_CHANGED || s->type == PATH_MODIFIED))
                 path_enter_running(p);
         else
                 path_enter_waiting(p, false, true);
