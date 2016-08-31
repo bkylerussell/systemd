@@ -65,7 +65,11 @@ int path_spec_watch(PathSpec *s, sd_event_io_handler_t handler) {
         assert(s->unit);
         assert(handler);
 
-        path_spec_unwatch(s);
+        /* Don't unwatch if we're already actively watching so we don't miss important events. */
+        if(s->primary_wd > 0)
+            return 0;
+        else
+            path_spec_unwatch(s);
 
         s->inotify_fd = inotify_init1(IN_NONBLOCK|IN_CLOEXEC);
         if (s->inotify_fd < 0) {
@@ -678,6 +682,9 @@ static int path_dispatch_io(sd_event_source *source, int fd, uint32_t revents, v
         }
 
         inotify_mask = path_spec_fd_event(s);
+
+        if (inotify_mask == IN_DELETE_SELF || inotify_mask == IN_MOVE_SELF)
+                s->primary_wd = 0;
 
         /* If we are already running, then remember that one event was
          * dispatched so that we restart the service only if something
